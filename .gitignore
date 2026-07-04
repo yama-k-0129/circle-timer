@@ -1,0 +1,8 @@
+# PyInstaller build artifacts (exe is distributed via GitHub Releases)
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.py[cod]
