@@ -15,7 +15,7 @@ import sys
 import time
 import math
 
-from PySide6.QtCore import Qt, QTimer, QRectF, QPointF, QSettings, QSize
+from PySide6.QtCore import Qt, QTimer, QRectF, QPointF, QSettings, QSize, QLocale
 from PySide6.QtGui import (QPainter, QPen, QColor, QBrush, QAction,
                            QRadialGradient, QPolygonF)
 from PySide6.QtWidgets import (QApplication, QWidget, QMenu, QSlider,
@@ -24,12 +24,30 @@ from PySide6.QtWidgets import (QApplication, QWidget, QMenu, QSlider,
 DIAL_MAX = 60 * 60          # ダイヤル1周 = 60分
 TICK_MS = 200               # 動作中のみ更新
 SNAP = 30                   # ドラッグセットのスナップ(秒)
+STRINGS = {
+    "ja": {
+        "start": "開始", "pause": "一時停止", "reset": "リセット",
+        "on_top": "常に前面に表示", "opacity": "透過度", "size": "サイズ",
+        "small": "小", "medium": "中", "large": "大", "quit": "終了", "language": "言語",
+    },
+    "en": {
+        "start": "Start", "pause": "Pause", "reset": "Reset",
+        "on_top": "Always on top", "opacity": "Opacity", "size": "Size",
+        "small": "Small", "medium": "Medium", "large": "Large", "quit": "Quit", "language": "Language",
+    },
+}
+# Default language follows the system locale; the Language menu overrides it
+DEFAULT_LANG = "ja" if QLocale.system().language() == QLocale.Language.Japanese else "en"
 
 
 class CircleTimer(QWidget):
     def __init__(self):
         super().__init__()
         self.settings = QSettings("kouki", "CircleTimer")
+
+        self.lang = self.settings.value("lang", DEFAULT_LANG)
+        if self.lang not in STRINGS:
+            self.lang = DEFAULT_LANG
 
         self.duration = int(self.settings.value("duration", 10 * 60))
         self.remaining = float(self.duration)
@@ -284,17 +302,19 @@ class CircleTimer(QWidget):
 
     def contextMenuEvent(self, e):
         menu = QMenu(self)
+        T = STRINGS[self.lang]
 
-        act_toggle = QAction("一時停止" if self.running else "開始", menu)
+        act_toggle = QAction(T["pause"] if self.running else T["start"], menu)
         act_toggle.triggered.connect(self.toggle)
         menu.addAction(act_toggle)
 
-        act_reset = QAction("リセット", menu)
+        act_reset = QAction(T["reset"], menu)
         act_reset.triggered.connect(self.reset)
         menu.addAction(act_reset)
+
         menu.addSeparator()
 
-        act_top = QAction("常に前面に表示", menu, checkable=True)
+        act_top = QAction(T["on_top"], menu, checkable=True)
         act_top.setChecked(bool(self.windowFlags() & Qt.WindowStaysOnTopHint))
         act_top.toggled.connect(self.set_on_top)
         menu.addAction(act_top)
@@ -303,7 +323,7 @@ class CircleTimer(QWidget):
         holder = QWidget(menu)
         lay = QHBoxLayout(holder)
         lay.setContentsMargins(12, 4, 12, 4)
-        lay.addWidget(QLabel("透過度"))
+        lay.addWidget(QLabel(T["opacity"]))
         slider = QSlider(Qt.Horizontal, holder)
         slider.setRange(25, 100)
         slider.setValue(int(self.windowOpacity() * 100))
@@ -314,18 +334,30 @@ class CircleTimer(QWidget):
         wa.setDefaultWidget(holder)
         menu.addAction(wa)
 
-        size_menu = menu.addMenu("サイズ")
-        for label, px in (("小", 190), ("中", 260), ("大", 340)):
-            a = QAction(label, size_menu)
+        size_menu = menu.addMenu(T["size"])
+        for key, px in (("small", 190), ("medium", 260), ("large", 340)):
+            a = QAction(T[key], size_menu)
             a.triggered.connect(lambda _=False, s=px: self.resize(s, s))
             size_menu.addAction(a)
 
+        lang_menu = menu.addMenu(T["language"])
+        for code, label in (("en", "English"), ("ja", "日本語")):
+            a = QAction(label, lang_menu, checkable=True)
+            a.setChecked(self.lang == code)
+            a.triggered.connect(lambda _=False, c=code: self.set_lang(c))
+            lang_menu.addAction(a)
+
         menu.addSeparator()
-        act_quit = QAction("終了", menu)
+
+        act_quit = QAction(T["quit"], menu)
         act_quit.triggered.connect(self.close)
         menu.addAction(act_quit)
 
         menu.exec(e.globalPos())
+
+    def set_lang(self, code):
+        self.lang = code
+        self.settings.setValue("lang", code)
 
     def set_on_top(self, on: bool, init: bool = False):
         self.setWindowFlag(Qt.WindowStaysOnTopHint, on)
